@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=pretrain_llava_v1.5_vicuna_stage1
+#SBATCH --job-name=finetune_llava_v1.5_vicuna_stage2_prefix_mask
 #SBATCH --partition=learnai4rl
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
 #SBATCH --gres=gpu:8                 # number of gpus
@@ -21,28 +21,31 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --nproc_per_node $GPUS_PER_NODE --nnodes $SLURM_NNODES --node_rank $SLURM_PROCID \
     --master_addr $MASTER_ADDR --master_port $MASTER_PORT \
     llava/train/train_mem.py \
-    --deepspeed ./scripts/zero2.json \
+    --deepspeed ./scripts/zero3.json \
     --model_name_or_path lmsys/vicuna-13b-v1.5 \
-    --version plain \
-    --data_path ./playground/data/LLaVA-Pretrain/blip_laion_cc_sbu_558k.json \
-    --image_folder ./playground/data/LLaVA-Pretrain/images \
+    --version v1 \
+    --prefix_mask True \
+    --data_path ./playground/data/llava_v1_5_mix665k.json \
+    --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \
+    --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-13b-pretrain/mm_projector.bin \
     --mm_projector_type mlp2x_gelu \
-    --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
+    --image_aspect_ratio pad \
+    --group_by_modality_length True \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-13b-pretrain \
+    --output_dir ./checkpoints/llava-v1.5-13b-prefix-mask-image-question \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 16 \
+    --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps 2 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
-    --save_steps 24000 \
+    --save_steps 50000 \
     --save_total_limit 1 \
-    --learning_rate 1e-3 \
+    --learning_rate 2e-5 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \

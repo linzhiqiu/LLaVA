@@ -254,3 +254,116 @@ class LlavaMetaForCausalLM(ABC):
                     p.requires_grad = False
                 for p in self.get_output_embeddings().parameters():
                     p.requires_grad = False
+
+
+class LlavaMetaForSeq2SeqLM(ABC):
+    
+    @abstractmethod
+    def get_model(self):
+        pass
+
+    def get_vision_tower(self):
+        return self.get_model().get_vision_tower()
+
+    def encode_images(self, images):
+        image_features = self.get_model().get_vision_tower()(images)
+        image_features = self.get_model().mm_projector(image_features)
+        return image_features
+
+    def prepare_inputs_labels_for_multimodal(
+        self, input_ids, attention_mask, decoder_attention_mask, past_key_values, labels, images
+    ):
+        # The labels are now separated from the input_ids.
+        vision_tower = self.get_vision_tower()
+        if vision_tower is None or images is None or input_ids.shape[1] == 1:
+            # TODO: This is probably off
+            raise NotImplementedError()
+            if past_key_values is not None and vision_tower is not None and images is not None and input_ids.shape[1] == 1:
+                attention_mask = torch.ones((attention_mask.shape[0], past_key_values[-1][-1].shape[-2] + 1), dtype=attention_mask.dtype, device=attention_mask.device)
+                decoder_attention_mask = torch.ones((decoder_attention_mask.shape[0], past_key_values[-1][-1].shape[-2] + 1), dtype=decoder_attention_mask.dtype, device=attention_mask.device)
+            return input_ids, attention_mask, decoder_attention_mask, past_key_values, None, labels
+
+        if type(images) is list or images.ndim == 5:
+            concat_images = torch.cat([image for image in images], dim=0)
+            image_features = self.encode_images(concat_images)
+            split_sizes = [image.shape[0] for image in images]
+            image_features = torch.split(image_features, split_sizes, dim=0)
+            image_features = [x.flatten(0, 1) for x in image_features]
+        else:
+            image_features = self.encode_images(images)
+        # TODO: Fix the function such that it doesn't expand the labels.
+        new_input_embeds = []
+        cur_image_idx = 0
+        for batch_idx, cur_input_ids in enumerate(input_ids):
+            if (cur_input_ids == IMAGE_TOKEN_INDEX).sum() == 0:
+                # multimodal LLM, but the current sample is not multimodal
+                # FIXME: this is a hacky fix, for deepspeed zero3 to work
+                half_len = cur_input_ids.shape[0] // 2
+                cur_image_features = image_features[cur_image_idx]
+                cur_input_embeds_1 = self.get_model().embed_tokens(cur_input_ids[:half_len])
+                cur_input_embeds_2 = self.get_model().embed_tokens(cur_input_ids[half_len:])
+                cur_input_embeds = torch.cat([cur_input_embeds_1, cur_image_features[0:0], cur_input_embeds_2], dim=0)
+                new_input_embeds.append(cur_input_embeds)
+                cur_image_idx += 1
+                continue
+            image_token_indices = torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0]
+            cur_new_input_embeds = []
+            while image_token_indices.numel() > 0:
+                cur_image_features = image_features[cur_image_idx]
+                image_token_start = image_token_indices[0]
+                if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
+                    cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[:image_token_start-1]).detach())
+                    cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[image_token_start-1:image_token_start]))
+                    cur_new_input_embeds.append(cur_image_features)
+                    cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[image_token_start+1:image_token_start+2]))
+                else:
+                    cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[:image_token_start]))
+                    cur_new_input_embeds.append(cur_image_features)
+                cur_image_idx += 1
+                if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
+                    cur_input_ids = cur_input_ids[image_token_start+2:]
+                else:
+                    cur_input_ids = cur_input_ids[image_token_start+1:]
+                image_token_indices = torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0]
+            if cur_input_ids.numel() > 0:
+                if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
+                    cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids).detach())
+                else:
+                    cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids))
+            cur_new_input_embeds = [x.to(device=self.device) for x in cur_new_input_embeds]
+            cur_new_input_embeds = torch.cat(cur_new_input_embeds, dim=0)
+            new_input_embeds.append(cur_new_input_embeds)
+
+        if any(x.shape != new_input_embeds[0].shape for x in new_input_embeds):
+            max_len = max(x.shape[0] for x in new_input_embeds)
+
+            new_input_embeds_align = []
+            _input_embeds_lengths = []
+            for cur_new_embed in new_input_embeds:
+                _input_embeds_lengths.append(cur_new_embed.shape[0])
+                cur_new_embed = torch.cat((cur_new_embed, torch.zeros((max_len - cur_new_embed.shape[0], cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device)), dim=0)
+                new_input_embeds_align.append(cur_new_embed)
+            new_input_embeds = torch.stack(new_input_embeds_align, dim=0)
+            
+            if attention_mask is not None:
+                new_attention_mask = []
+                for cur_attention_mask, _input_embeds_length in zip(attention_mask, _input_embeds_lengths):
+                    new_attn_mask_pad_left = torch.full((_input_embeds_length - input_ids.shape[1],), True, dtype=attention_mask.dtype, device=attention_mask.device)
+                    new_attn_mask_pad_right = torch.full((new_input_embeds.shape[1] - _input_embeds_length,), False, dtype=attention_mask.dtype, device=attention_mask.device)
+                    cur_new_attention_mask = torch.cat((new_attn_mask_pad_left, cur_attention_mask, new_attn_mask_pad_right), dim=0)
+                    new_attention_mask.append(cur_new_attention_mask)
+                attention_mask = torch.stack(new_attention_mask, dim=0)
+                assert attention_mask.shape == new_input_embeds.shape[:2]
+        else:
+            new_input_embeds = torch.stack(new_input_embeds, dim=0)
+
+            if attention_mask is not None:
+                new_attn_mask_pad_left = torch.full((attention_mask.shape[0], new_input_embeds.shape[1] - input_ids.shape[1]), True, dtype=attention_mask.dtype, device=attention_mask.device)
+                attention_mask = torch.cat((new_attn_mask_pad_left, attention_mask), dim=1)
+                assert attention_mask.shape == new_input_embeds.shape[:2]
+
+        return None, attention_mask, decoder_attention_mask, past_key_values, new_input_embeds, labels
+
+    def initialize_vision_tokenizer(self, model_args, tokenizer):
+        assert not model_args.mm_use_im_patch_token
+        assert not model_args.mm_use_im_start_end

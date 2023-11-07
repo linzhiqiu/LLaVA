@@ -9,6 +9,12 @@ class SeparatorStyle(Enum):
     TWO = auto()
     MPT = auto()
     PLAIN = auto()
+    PLAIN_SPLIT_TEXT = auto()
+    PLAIN_SPLIT_TEXT_ALL = auto()
+    T5MODEL_PLAIN = auto()
+    T5MODEL_PLAIN_SPLIT_TEXT = auto()
+    T5MODEL_PLAIN_SPLIT_TEXT_ALL = auto()
+    T5MODEL_TWO = auto()
     LLAMA_2 = auto()
 
 
@@ -25,6 +31,33 @@ class Conversation:
     version: str = "Unknown"
 
     skip_next: bool = False
+    
+    def get_t5_input(self):
+        # Temporary solution: Pass all prev conversation history to T5-encoder except for last response
+        messages = self.messages
+        assert self.sep_style == SeparatorStyle.T5MODEL_TWO
+        seps = [self.sep, self.sep2]
+        ret = self.system + seps[0]
+        for i, (role, message) in enumerate(messages[:-1]):
+            if message:
+                if type(message) is tuple:
+                    message, _, _ = message
+                ret += role + ": " + message + seps[i % 2]
+            else:
+                ret += role + ":"
+        return ret
+
+    def get_t5_output(self):
+        # Temporary solution: Pass all prev conversation history to T5-encoder except for last response
+        messages = self.messages
+        assert self.sep_style == SeparatorStyle.T5MODEL_TWO
+        role, message = messages[-1]
+        if message:
+            if type(message) is tuple:
+                message, _, _ = message
+        ret = role + ": " + message + self.sep2
+        assert role == self.roles[1], "last message should come from assistant"
+        return ret
 
     def get_prompt(self):
         messages = self.messages
@@ -261,6 +294,29 @@ conv_vicuna_v1 = Conversation(
     sep2="</s>",
 )
 
+conv_t5_v1 = Conversation(
+    system="A chat between a curious user and an artificial intelligence assistant. "
+    "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+    roles=("USER", "ASSISTANT"),
+    version="t5_v1",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_TWO,
+    sep=" ",
+    sep2="",
+)
+
+conv_t5_v2 = Conversation(
+    system="A chat between a user and an AI assistant. ",
+    roles=("USER", "ASSISTANT"),
+    version="t5_v2",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_TWO,
+    sep=" ",
+    sep2="",
+)
+
 conv_llama_2 = Conversation(
     system="""You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
 
@@ -306,6 +362,56 @@ conv_llava_plain = Conversation(
     offset=0,
     sep_style=SeparatorStyle.PLAIN,
     sep="\n",
+)
+
+conv_llava_plain_split_text = Conversation(
+    system="",
+    roles=("", ""),
+    messages=(
+    ),
+    offset=0,
+    sep_style=SeparatorStyle.PLAIN_SPLIT_TEXT,
+    sep="\n",
+)
+
+conv_llava_plain_split_text_all = Conversation(
+    system="",
+    roles=("", ""),
+    messages=(
+    ),
+    offset=0,
+    sep_style=SeparatorStyle.PLAIN_SPLIT_TEXT_ALL,
+    sep="\n",
+)
+
+t5_conv_llava_plain = Conversation(
+    system="",
+    roles=("", ""),
+    messages=(
+    ),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_PLAIN,
+    sep="",
+)
+
+t5_conv_llava_plain_split_text = Conversation(
+    system="",
+    roles=("", ""),
+    messages=(
+    ),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_PLAIN_SPLIT_TEXT,
+    sep="",
+)
+
+t5_conv_llava_plain_split_text_all = Conversation(
+    system="",
+    roles=("", ""),
+    messages=(
+    ),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_PLAIN_SPLIT_TEXT_ALL,
+    sep="",
 )
 
 conv_llava_v0 = Conversation(
@@ -367,6 +473,8 @@ conv_templates = {
 
     "plain": conv_llava_plain,
     "v0_plain": conv_llava_plain,
+    'plain_split_text': conv_llava_plain_split_text,
+    'plain_split_text_all': conv_llava_plain_split_text_all,
     "llava_v0": conv_llava_v0,
     "v0_mmtag": conv_llava_v0_mmtag,
     "llava_v1": conv_llava_v1,
@@ -374,6 +482,12 @@ conv_templates = {
     "llava_llama_2": conv_llava_llama_2,
 
     "mpt": conv_mpt,
+    
+    "t5_plain": t5_conv_llava_plain,
+    't5_plain_split_text': t5_conv_llava_plain_split_text,
+    't5_plain_split_text_all': t5_conv_llava_plain_split_text_all,
+    "t5_v1": conv_t5_v1,
+    "t5_v2": conv_t5_v2,
 }
 
 

@@ -21,6 +21,7 @@ import json
 import logging
 import pathlib
 from typing import Dict, Optional, Sequence, List
+import random
 
 import torch
 
@@ -32,7 +33,7 @@ from llava.train.llava_trainer import LLaVATrainer
 
 from llava import conversation as conversation_lib
 from llava.model import *
-from llava.mm_utils import tokenizer_image_token
+from llava.mm_utils import tokenizer_image_token, t5_tokenizer_image_token
 
 from PIL import Image
 
@@ -58,6 +59,7 @@ class ModelArguments:
     mm_use_im_start_end: bool = field(default=False)
     mm_use_im_patch_token: bool = field(default=True)
     mm_vision_select_feature: Optional[str] = field(default="patch")
+    prefix_mask: bool = field(default=False)
 
 
 @dataclass
@@ -487,6 +489,58 @@ def preprocess_v1(
     )
 
 
+def preprocess_v1_t5(
+    sources,
+    tokenizer: transformers.PreTrainedTokenizer,
+    has_image: bool = False
+) -> Dict:
+    conv = conversation_lib.default_conversation.copy()
+    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
+
+    # Apply prompt templates
+    conversations = []
+    targets = []
+    for i, source in enumerate(sources):
+        if roles[source[0]["from"]] != conv.roles[0]:
+            # Skip the first one if it is not from human
+            source = source[1:]
+
+        conv.messages = []
+        for j, sentence in enumerate(source):
+            role = roles[sentence["from"]]
+            assert role == conv.roles[j % 2], f"{i}"
+            conv.append_message(role, sentence["value"])
+        conversations.append(conv.get_t5_input())
+        targets.append(conv.get_t5_output())
+
+    # Tokenize conversations
+    if has_image:
+        input_ids = torch.stack([t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations], dim=0)
+        targets = torch.stack([t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets], dim=0)
+    else:
+        input_ids = tokenizer(
+            conversations,
+            return_tensors="pt",
+            padding="longest",
+            max_length=tokenizer.model_max_length,
+            truncation=True,
+        ).input_ids
+        targets = tokenizer(
+            targets,
+            return_tensors="pt",
+            padding="longest",
+            max_length=tokenizer.model_max_length,
+            truncation=True,
+        ).input_ids
+
+    assert conv.sep_style == conversation_lib.SeparatorStyle.T5MODEL_TWO
+
+    return dict(
+        input_ids=input_ids,
+        labels=targets,
+    )
+
+
 def preprocess_mpt(
     sources,
     tokenizer: transformers.PreTrainedTokenizer,
@@ -574,6 +628,145 @@ def preprocess_plain(
 
     return dict(input_ids=input_ids, labels=targets)
 
+def preprocess_plain_t5(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    conversations = []
+    targets = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        conversation = source[0]['value']
+        conversations.append(conversation)
+        target = source[1]['value'] + conversation_lib.default_conversation.sep
+        targets.append(target)
+    
+    # tokenize conversations
+    input_ids = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets]
+
+    return dict(input_ids=input_ids, labels=targets)
+
+
+def preprocess_plain_split_text(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    conversations = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        conversation = source[0]['value'] + source[1]['value'] + conversation_lib.default_conversation.sep
+        conversations.append(conversation)
+    # tokenize conversations
+    input_ids = [tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = copy.deepcopy(input_ids)
+    for target, source in zip(targets, sources):
+        tokenized_len = len(tokenizer_image_token(source[0]['value'], tokenizer))
+        text_all = source[1]['value'] + conversation_lib.default_conversation.sep
+        text_len = len(text_all)
+        if text_len < 2:
+            split = 0
+        else:
+            split = random.randint(1, text_len // 2)
+        prefix = text_all[:split]
+        prefix_len = len(tokenizer_image_token(prefix, tokenizer))
+        target[:tokenized_len+prefix_len] = IGNORE_INDEX
+        
+    return dict(input_ids=input_ids, labels=targets)
+
+def preprocess_plain_split_text_t5(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    conversations = []
+    targets = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        target = source[1]['value'] + conversation_lib.default_conversation.sep
+        text_len = len(target)
+        if text_len < 2:
+            split = 0
+        else:
+            split = random.randint(1, text_len // 2)
+        prefix = target[:split]
+        conversation = source[0]['value'] + prefix
+        conversations.append(conversation)
+        
+        targets.append(target[split:])
+    
+    # tokenize conversations
+    input_ids = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets]
+
+    return dict(input_ids=input_ids, labels=targets)
+
+
+def preprocess_plain_split_text_all(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    conversations = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        conversation = source[0]['value'] + source[1]['value'] + conversation_lib.default_conversation.sep
+        conversations.append(conversation)
+    # tokenize conversations
+    input_ids = [tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = copy.deepcopy(input_ids)
+    for target, source in zip(targets, sources):
+        tokenized_len = len(tokenizer_image_token(source[0]['value'], tokenizer))
+        text_all = source[1]['value'] + conversation_lib.default_conversation.sep
+        text_len = len(text_all)
+        if text_len < 2:
+            split = 0
+        else:
+            split = random.randint(1, text_len)
+        prefix = text_all[:split]
+        prefix_len = len(tokenizer_image_token(prefix, tokenizer))
+        target[:tokenized_len+prefix_len] = IGNORE_INDEX
+        
+    return dict(input_ids=input_ids, labels=targets)
+
+def preprocess_plain_split_text_all_t5(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    conversations = []
+    targets = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        target = source[1]['value'] + conversation_lib.default_conversation.sep
+        text_len = len(target)
+        if text_len < 2:
+            split = 0
+        else:
+            split = random.randint(1, text_len)
+        prefix = target[:split]
+        conversation = source[0]['value'] + prefix
+        conversations.append(conversation)
+        
+        targets.append(target[split:])
+    
+    # tokenize conversations
+    input_ids = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets]
+
+    return dict(input_ids=input_ids, labels=targets)
 
 def preprocess(
     sources: Sequence[str],
@@ -589,8 +782,22 @@ def preprocess(
     """
     if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN:
         return preprocess_plain(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN_SPLIT_TEXT:
+        return preprocess_plain_split_text(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN_SPLIT_TEXT_ALL:
+        return preprocess_plain_split_text_all(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.T5MODEL_PLAIN:
+        return preprocess_plain_t5(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.T5MODEL_PLAIN_SPLIT_TEXT:
+        return preprocess_plain_split_text_t5(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.T5MODEL_PLAIN_SPLIT_TEXT_ALL:
+        return preprocess_plain_split_text_all_t5(sources, tokenizer)
     if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.LLAMA_2:
         return preprocess_llama_2(sources, tokenizer, has_image=has_image)
+    if conversation_lib.default_conversation.version.startswith("t5_v1"):
+        return preprocess_v1_t5(sources, tokenizer, has_image=has_image)
+    if conversation_lib.default_conversation.version.startswith("t5_v2"):
+        return preprocess_v1_t5(sources, tokenizer, has_image=has_image)
     if conversation_lib.default_conversation.version.startswith("v1"):
         return preprocess_v1(sources, tokenizer, has_image=has_image)
     if conversation_lib.default_conversation.version == "mpt":
@@ -739,15 +946,50 @@ class DataCollatorForSupervisedDataset(object):
                 batch['images'] = images
 
         return batch
+    
+@dataclass
+class DataCollatorForSupervisedDatasetT5(object):
+    """Collate examples for supervised fine-tuning for T5 (Seq2Seq Model)."""
+
+    tokenizer: transformers.PreTrainedTokenizer
+
+    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        input_ids, labels = tuple([instance[key] for instance in instances]
+                                  for key in ("input_ids", "labels"))
+        input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id)
+        labels = torch.nn.utils.rnn.pad_sequence(labels,
+                                                 batch_first=True,
+                                                 padding_value=IGNORE_INDEX)
+        input_ids = input_ids[:, :self.tokenizer.model_max_length]
+        labels = labels[:, :self.tokenizer.model_max_length]
+        batch = dict(
+            input_ids=input_ids,
+            labels=labels,
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+            decoder_attention_mask=labels.ne(IGNORE_INDEX),
+        )
+
+        if 'image' in instances[0]:
+            images = [instance['image'] for instance in instances]
+            if all(x is not None and x.shape == images[0].shape for x in images):
+                batch['images'] = torch.stack(images)
+            else:
+                batch['images'] = images
+
+        return batch
 
 
 def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
+                                data_collator_class: DataCollatorForSupervisedDataset,
                                 data_args) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
     train_dataset = LazySupervisedDataset(tokenizer=tokenizer,
                                 data_path=data_args.data_path,
                                 data_args=data_args)
-    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
+    data_collator = data_collator_class(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,
                 data_collator=data_collator)
@@ -787,6 +1029,21 @@ def train():
             model = LlavaMPTForCausalLM.from_pretrained(
                 model_args.model_name_or_path,
                 config=config,
+                cache_dir=training_args.cache_dir,
+                **bnb_model_from_pretrained_args
+            )
+        elif 'flan-t5' in model_args.model_name_or_path or 't5-' in model_args.model_name_or_path:
+            config = transformers.AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
+            model = LlavaT5ForConditionalGeneration.from_pretrained(
+                model_args.model_name_or_path,
+                config=config,
+                cache_dir=training_args.cache_dir,
+                **bnb_model_from_pretrained_args
+            )
+        elif model_args.prefix_mask:
+            rank0_print("Using Casual+PrefixMask for LLaMA!")
+            model = PrefixMaskLlavaLlamaForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
                 cache_dir=training_args.cache_dir,
                 **bnb_model_from_pretrained_args
             )
@@ -843,7 +1100,20 @@ def train():
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
             model_max_length=training_args.model_max_length,
-            padding_side="right"
+            padding_side="right",
+        )
+    elif 'flan-t5' in model_args.model_name_or_path or 't5-' in model_args.model_name_or_path:
+        from transformers import T5TokenizerFast
+        # tokenizer = {
+        #     'encoder': T5TokenizerFast.from_pretrained(model_args.model_name_or_path, truncation_side='left'),
+        #     'decoder': T5TokenizerFast.from_pretrained(model_args.model_name_or_path, truncation_side='right'),
+        # }
+        tokenizer = T5TokenizerFast.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            truncation_side='right',
+            padding_side="right",
         )
     else:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -854,7 +1124,12 @@ def train():
             use_fast=False,
         )
 
-    if model_args.version == "v0":
+    if 'flan-t5' in model_args.model_name_or_path or 't5-' in model_args.model_name_or_path:
+        if model_args.version in conversation_lib.conv_templates:
+            conversation_lib.default_conversation = conversation_lib.conv_templates[model_args.version]
+        else:
+            conversation_lib.default_conversation = conversation_lib.conv_templates["t5_v1"]
+    elif model_args.version == "v0":
         if tokenizer.pad_token is None:
             smart_tokenizer_and_embedding_resize(
                 special_tokens_dict=dict(pad_token="[PAD]"),
@@ -900,6 +1175,7 @@ def train():
             model.get_model().mm_projector.to(dtype=compute_dtype, device=training_args.device)
 
         model.config.mm_use_im_start_end = data_args.mm_use_im_start_end = model_args.mm_use_im_start_end
+        model.config.prefix_mask = model_args.prefix_mask
         training_args.use_im_start_end = model_args.mm_use_im_start_end
         model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
         model.initialize_vision_tokenizer(model_args, tokenizer=tokenizer)
@@ -916,9 +1192,13 @@ def train():
                 if hasattr(module, 'weight'):
                     if training_args.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
-
-    data_module = make_supervised_data_module(tokenizer=tokenizer,
-                                              data_args=data_args)
+    
+    data_module = make_supervised_data_module(
+        tokenizer=tokenizer,
+        data_collator_class=DataCollatorForSupervisedDatasetT5 if ('flan-t5' in model_args.model_name_or_path or 't5-' in model_args.model_name_or_path) else DataCollatorForSupervisedDataset,
+        data_args=data_args
+    )
+    torch.cuda.empty_cache() # Added for Flan-T5
     trainer = LLaVATrainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,

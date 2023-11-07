@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=pretrain_llava_v1.5_vicuna_stage1
+#SBATCH --job-name=pretrain_llava_v1.5_flant5xl_stage1_split_text_lr_1e_2
 #SBATCH --partition=learnai4rl
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
@@ -7,6 +7,7 @@
 #SBATCH --gres=gpu:8                 # number of gpus
 #SBATCH --time 4-00:00:00            # maximum execution time (HH:MM:SS)
 #SBATCH --output=logs/%x-%j.out           # output file name
+#SBATCH --exclude=a100-st-p4d24xlarge-[94,95]
 
 echo "START TIME: $(date)"
 
@@ -22,8 +23,8 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --master_addr $MASTER_ADDR --master_port $MASTER_PORT \
     llava/train/train_mem.py \
     --deepspeed ./scripts/zero2.json \
-    --model_name_or_path lmsys/vicuna-13b-v1.5 \
-    --version plain \
+    --model_name_or_path google/flan-t5-xl \
+    --version t5_plain_split_text \
     --data_path ./playground/data/LLaVA-Pretrain/blip_laion_cc_sbu_558k.json \
     --image_folder ./playground/data/LLaVA-Pretrain/images \
     --vision_tower openai/clip-vit-large-patch14-336 \
@@ -33,7 +34,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-13b-pretrain \
+    --output_dir ./checkpoints/llava-v1.5-flant5-xl-pretrain-split-text-lr-1e-2 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 4 \
@@ -42,7 +43,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --save_strategy "steps" \
     --save_steps 24000 \
     --save_total_limit 1 \
-    --learning_rate 1e-3 \
+    --learning_rate 1e-2 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \

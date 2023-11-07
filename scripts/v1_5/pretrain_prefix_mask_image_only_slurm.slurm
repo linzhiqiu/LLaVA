@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=pretrain_llava_v1.5_vicuna_stage1
+#SBATCH --job-name=pretrain_llava_v1.5_vicuna_stage1_prefix_mask_image_only
 #SBATCH --partition=learnai4rl
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
@@ -24,6 +24,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --deepspeed ./scripts/zero2.json \
     --model_name_or_path lmsys/vicuna-13b-v1.5 \
     --version plain \
+    --prefix_mask True \
     --data_path ./playground/data/LLaVA-Pretrain/blip_laion_cc_sbu_558k.json \
     --image_folder ./playground/data/LLaVA-Pretrain/images \
     --vision_tower openai/clip-vit-large-patch14-336 \
@@ -33,7 +34,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-13b-pretrain \
+    --output_dir ./checkpoints/llava-v1.5-13b-pretrain-prefix-mask-image-only \
     --num_train_epochs 1 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 4 \
