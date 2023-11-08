@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=pretrain_llava_v1.5_flant5xxl_stage1_lr_1e_2_a100
-#SBATCH --partition=learnai4rl
+#SBATCH --partition=onevision
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
