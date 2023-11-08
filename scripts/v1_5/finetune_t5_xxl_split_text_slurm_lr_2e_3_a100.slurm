@@ -28,7 +28,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --data_path ./playground/data/llava_v1_5_mix665k.json \
     --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \
-    --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-t5-xxl-pretrain-split-text-a100/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-t5-xxl-pretrain-split-text-lr-1e-2-a100//mm_projector.bin \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
