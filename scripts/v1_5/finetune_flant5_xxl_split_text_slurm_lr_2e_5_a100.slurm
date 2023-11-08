@@ -1,13 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-128-a100
-#SBATCH --partition=learnai4rl
-#SBATCH --nodes=4
+#SBATCH --partition=onevision
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
 #SBATCH --gres=gpu:8                 # number of gpus
 #SBATCH --time 4-00:00:00            # maximum execution time (HH:MM:SS)
 #SBATCH --output=logs/%x-%j.out           # output file name
-#SBATCH --exclude=a100-st-p4d24xlarge-[94,95,44,45,46,47,69,98,101,24,99,100]
 
 echo "START TIME: $(date)"
 
@@ -39,7 +38,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --bf16 True \
     --output_dir ./checkpoints/llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-128-a100 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
+    --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 2 \
     --evaluation_strategy "no" \
