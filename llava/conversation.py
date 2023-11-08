@@ -306,6 +306,18 @@ conv_t5_v1 = Conversation(
     sep2="",
 )
 
+conv_t5_v1_original = Conversation(
+    system="A chat between a curious user and an artificial intelligence assistant. "
+    "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+    roles=("USER", "ASSISTANT"),
+    version="t5_v1",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_TWO,
+    sep=" ",
+    sep2="</s>",
+)
+
 conv_t5_v2 = Conversation(
     system="A chat between a user and an AI assistant. ",
     roles=("USER", "ASSISTANT"),
@@ -487,6 +499,7 @@ conv_templates = {
     't5_plain_split_text': t5_conv_llava_plain_split_text,
     't5_plain_split_text_all': t5_conv_llava_plain_split_text_all,
     "t5_v1": conv_t5_v1,
+    "t5_v1_original": conv_t5_v1_original,
     "t5_v2": conv_t5_v2,
 }
 
