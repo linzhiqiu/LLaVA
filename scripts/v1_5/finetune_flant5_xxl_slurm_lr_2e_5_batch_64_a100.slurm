@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=llava-v1.5-flant5-xxl-stage1-lr-1e-2-stage-2-lr-2e-5-batch-144-a100
+#SBATCH --job-name=llava-v1.5-flant5-xxl-stage1-lr-1e-2-stage-2-lr-2e-5-batch-64-a100
 #SBATCH --partition=onevision
-#SBATCH --nodes=3
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
 #SBATCH --gres=gpu:8                 # number of gpus
@@ -38,9 +38,9 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --bf16 True \
     --output_dir ./checkpoints/llava-v1.5-flant5-xxl-stage1-lr-1e-2-stage-2-lr-2e-5-batch-144-a100 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 3 \
+    --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 2 \
+    --gradient_accumulation_steps 4 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
     --save_steps 50000 \
