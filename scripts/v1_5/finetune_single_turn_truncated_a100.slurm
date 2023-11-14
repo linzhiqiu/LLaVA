@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=llava-v1.5-t5-xxl-split-text-stage1-lr-1e-3-stage-2-lr-2e-4-batch-64-a100
-#SBATCH --partition=onevision
+#SBATCH --job-name=finetune_llava_v1.5_vicuna_stage2_single_turn_truncated
+#SBATCH --partition=learnai4rl
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
@@ -10,7 +10,6 @@
 
 echo "START TIME: $(date)"
 
-export NCCL_DEBUG=WARN
 export GPUS_PER_NODE=8
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export MASTER_PORT=9901
@@ -23,12 +22,12 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --master_addr $MASTER_ADDR --master_port $MASTER_PORT \
     llava/train/train_mem.py \
     --deepspeed ./scripts/zero3.json \
-    --model_name_or_path t5-11b \
-    --version t5_v1 \
-    --data_path ./playground/data/llava_v1_5_mix665k.json \
+    --model_name_or_path lmsys/vicuna-13b-v1.5 \
+    --version v1 \
+    --data_path ./playground/data/llava_v1_5_mix665k_single_turn_truncated.json \
     --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \
-    --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-t5-xxl-pretrain-split-text-lr-1e-2-a100//mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-13b-pretrain/mm_projector.bin \
     --mm_projector_type mlp2x_gelu \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
@@ -36,16 +35,16 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-t5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-4-batch-64-a100 \
+    --output_dir ./checkpoints/llava-v1.5-13b-single-turn-truncated \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
+    --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
     --save_steps 50000 \
     --save_total_limit 1 \
-    --learning_rate 2e-4 \
+    --learning_rate 2e-5 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \

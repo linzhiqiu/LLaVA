@@ -36,7 +36,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-t5-xxl-split-text-stage1-lr-1e-3-stage-2-lr-2e-5-batch-64-a100 \
+    --output_dir ./checkpoints/llava-v1.5-t5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-64-a100 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \

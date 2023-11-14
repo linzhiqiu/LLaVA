@@ -15,6 +15,7 @@ class SeparatorStyle(Enum):
     T5MODEL_PLAIN_SPLIT_TEXT = auto()
     T5MODEL_PLAIN_SPLIT_TEXT_ALL = auto()
     T5MODEL_TWO = auto()
+    T5MODEL_TWO_NO_ROLE = auto()
     LLAMA_2 = auto()
 
 
@@ -35,28 +36,41 @@ class Conversation:
     def get_t5_input(self):
         # Temporary solution: Pass all prev conversation history to T5-encoder except for last response
         messages = self.messages
-        assert self.sep_style == SeparatorStyle.T5MODEL_TWO
-        seps = [self.sep, self.sep2]
-        ret = self.system + seps[0]
-        for i, (role, message) in enumerate(messages[:-1]):
-            if message:
-                if type(message) is tuple:
-                    message, _, _ = message
-                ret += role + ": " + message + seps[i % 2]
-            else:
-                ret += role + ":"
+        if self.sep_style == SeparatorStyle.T5MODEL_TWO:
+            seps = [self.sep, self.sep2]
+            ret = self.system + seps[0]
+            for i, (role, message) in enumerate(messages[:-1]):
+                if message:
+                    if type(message) is tuple:
+                        message, _, _ = message
+                    ret += role + ": " + message + seps[i % 2]
+                else:
+                    ret += role + ":"
+        elif self.sep_style == SeparatorStyle.T5MODEL_TWO_NO_ROLE:
+            ret = ""
+            for i, (role, message) in enumerate(messages[:-1]):
+                if message:
+                    if type(message) is tuple:
+                        message, _, _ = message
+                    ret += message
         return ret
 
     def get_t5_output(self):
         # Temporary solution: Pass all prev conversation history to T5-encoder except for last response
         messages = self.messages
-        assert self.sep_style == SeparatorStyle.T5MODEL_TWO
-        role, message = messages[-1]
-        if message:
-            if type(message) is tuple:
-                message, _, _ = message
-        ret = role + ": " + message + self.sep2
-        assert role == self.roles[1], "last message should come from assistant"
+        if self.sep_style == SeparatorStyle.T5MODEL_TWO:
+            role, message = messages[-1]
+            if message:
+                if type(message) is tuple:
+                    message, _, _ = message
+            ret = role + ": " + message + self.sep2
+            assert role == self.roles[1], "last message should come from assistant"
+        elif self.sep_style == SeparatorStyle.T5MODEL_TWO_NO_ROLE:
+            role, message = messages[-1]
+            if message:
+                if type(message) is tuple:
+                    message, _, _ = message
+            ret = message
         return ret
 
     def get_prompt(self):
@@ -294,6 +308,28 @@ conv_vicuna_v1 = Conversation(
     sep2="</s>",
 )
 
+conv_t5_v1_single_turn = Conversation(
+    system="",
+    roles=("USER", "ASSISTANT"),
+    version="t5_v1",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_TWO,
+    sep="",
+    sep2="",
+)
+
+conv_t5_v1_single_turn_no_role = Conversation(
+    system="",
+    roles=("", ""),
+    version="t5_v1",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.T5MODEL_TWO_NO_ROLE,
+    sep="",
+    sep2="",
+)
+
 conv_t5_v1 = Conversation(
     system="A chat between a curious user and an artificial intelligence assistant. "
     "The assistant gives helpful, detailed, and polite answers to the user's questions.",
@@ -520,6 +556,8 @@ conv_templates = {
     "t5_plain": t5_conv_llava_plain,
     't5_plain_split_text': t5_conv_llava_plain_split_text,
     't5_plain_split_text_all': t5_conv_llava_plain_split_text_all,
+    "t5_v1_single_turn": conv_t5_v1_single_turn,
+    "t5_v1_single_turn_no_role": conv_t5_v1_single_turn_no_role,
     "t5_v1": conv_t5_v1,
     "t5_v1_original": conv_t5_v1_original,
     "t5_v1_no_original": conv_t5_v1_no_original,
