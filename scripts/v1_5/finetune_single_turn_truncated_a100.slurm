@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=finetune_llava_v1.5_vicuna_stage2_single_turn_truncated
-#SBATCH --partition=learnai4rl
+#SBATCH --partition=onevision
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
