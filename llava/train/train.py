@@ -533,7 +533,7 @@ def preprocess_v1_t5(
             truncation=True,
         ).input_ids
 
-    assert conv.sep_style == conversation_lib.SeparatorStyle.T5MODEL_TWO
+    assert conv.sep_style == conversation_lib.SeparatorStyle.T5MODEL_TWO or conv.sep_style == conversation_lib.SeparatorStyle.T5MODEL_TWO_NO_ROLE
 
     return dict(
         input_ids=input_ids,
