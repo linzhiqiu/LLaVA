@@ -2,8 +2,8 @@ python \
     llava/train/temp.py \
     --deepspeed ./scripts/zero3.json \
     --model_name_or_path t5-11b \
-    --version t5_v1_single_turn \
-    --data_path ./playground/data/llava_v1_5_mix665k_single_turn.json \
+    --version t5_v1 \
+    --data_path ./playground/data/llava_v1_5_mix665k.json \
     --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \
     --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-t5-xxl-pretrain-split-text/mm_projector.bin \

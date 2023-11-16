@@ -24,7 +24,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     llava/train/train_mem.py \
     --deepspeed ./scripts/zero3.json \
     --model_name_or_path google/flan-t5-xxl \
-    --version t5_v1_single_turn \
+    --version t5_v1 \
     --data_path ./playground/data/llava_v1_5_mix665k_single_turn.json \
     --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \

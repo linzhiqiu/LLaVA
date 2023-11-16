@@ -38,7 +38,11 @@ class Conversation:
         messages = self.messages
         if self.sep_style == SeparatorStyle.T5MODEL_TWO:
             seps = [self.sep, self.sep2]
-            ret = self.system + seps[0]
+            # ret = self.system + seps[0]
+            if len(self.system) > 0:
+                ret = self.system + seps[0]
+            else:
+                ret = ""
             for i, (role, message) in enumerate(messages[:-1]):
                 if message:
                     if type(message) is tuple:
@@ -46,6 +50,7 @@ class Conversation:
                     ret += role + ": " + message + seps[i % 2]
                 else:
                     ret += role + ":"
+            ret += messages[-1][0] + ": " # the trailing whitespace doesn't affect T5 tokenizer (but affect vicuna)
         elif self.sep_style == SeparatorStyle.T5MODEL_TWO_NO_ROLE:
             ret = ""
             for i, (role, message) in enumerate(messages[:-1]):
@@ -63,7 +68,8 @@ class Conversation:
             if message:
                 if type(message) is tuple:
                     message, _, _ = message
-            ret = role + ": " + message + self.sep2
+            # ret = role + ": " + message + self.sep2
+            ret = message
             assert role == self.roles[1], "last message should come from assistant"
         elif self.sep_style == SeparatorStyle.T5MODEL_TWO_NO_ROLE:
             role, message = messages[-1]
@@ -308,25 +314,25 @@ conv_vicuna_v1 = Conversation(
     sep2="</s>",
 )
 
-conv_t5_v1_single_turn = Conversation(
+conv_t5_v1_no_sys = Conversation(
     system="",
     roles=("USER", "ASSISTANT"),
     version="t5_v1",
     messages=(),
     offset=0,
     sep_style=SeparatorStyle.T5MODEL_TWO,
-    sep="",
+    sep=" ",
     sep2="",
 )
 
-conv_t5_v1_single_turn_no_role = Conversation(
+conv_t5_v1_no_sys_no_role = Conversation(
     system="",
     roles=("", ""),
     version="t5_v1",
     messages=(),
     offset=0,
     sep_style=SeparatorStyle.T5MODEL_TWO_NO_ROLE,
-    sep="",
+    sep=" ",
     sep2="",
 )
 
@@ -339,7 +345,7 @@ conv_t5_v1 = Conversation(
     offset=0,
     sep_style=SeparatorStyle.T5MODEL_TWO,
     sep=" ",
-    sep2="",
+    sep2=" ",
 )
 
 conv_t5_v1_original = Conversation(
@@ -354,27 +360,27 @@ conv_t5_v1_original = Conversation(
     sep2="</s>",
 )
 
-conv_t5_v1_no = Conversation(
-    system="",
-    roles=("USER", "ASSISTANT"),
-    version="t5_v1",
-    messages=(),
-    offset=0,
-    sep_style=SeparatorStyle.T5MODEL_TWO,
-    sep=" ",
-    sep2="",
-)
+# conv_t5_v1_no = Conversation(
+#     system="",
+#     roles=("USER", "ASSISTANT"),
+#     version="t5_v1",
+#     messages=(),
+#     offset=0,
+#     sep_style=SeparatorStyle.T5MODEL_TWO,
+#     sep=" ",
+#     sep2="",
+# )
 
-conv_t5_v1_no_original = Conversation(
-    system="",
-    roles=("USER", "ASSISTANT"),
-    version="t5_v1",
-    messages=(),
-    offset=0,
-    sep_style=SeparatorStyle.T5MODEL_TWO,
-    sep=" ",
-    sep2="</s>",
-)
+# conv_t5_v1_no_original = Conversation(
+#     system="",
+#     roles=("USER", "ASSISTANT"),
+#     version="t5_v1",
+#     messages=(),
+#     offset=0,
+#     sep_style=SeparatorStyle.T5MODEL_TWO,
+#     sep=" ",
+#     sep2="</s>",
+# )
 
 conv_t5_v2 = Conversation(
     system="A chat between a user and an AI assistant. ",
@@ -556,12 +562,12 @@ conv_templates = {
     "t5_plain": t5_conv_llava_plain,
     't5_plain_split_text': t5_conv_llava_plain_split_text,
     't5_plain_split_text_all': t5_conv_llava_plain_split_text_all,
-    "t5_v1_single_turn": conv_t5_v1_single_turn,
-    "t5_v1_single_turn_no_role": conv_t5_v1_single_turn_no_role,
+    "t5_v1_no_sys": conv_t5_v1_no_sys,
+    "t5_v1_no_sys_no_role": conv_t5_v1_no_sys_no_role,
     "t5_v1": conv_t5_v1,
-    "t5_v1_original": conv_t5_v1_original,
-    "t5_v1_no_original": conv_t5_v1_no_original,
-    "t5_v1_no": conv_t5_v1_no,
+    # "t5_v1_original": conv_t5_v1_original,
+    # "t5_v1_no_original": conv_t5_v1_no_original,
+    # "t5_v1_no": conv_t5_v1_no,
     "t5_v2": conv_t5_v2,
 }
 
