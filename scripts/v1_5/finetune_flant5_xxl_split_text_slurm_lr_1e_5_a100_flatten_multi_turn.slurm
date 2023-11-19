@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-1e-5-batch-64-a100-flattened-multi-turn
+#SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-1e-5-batch-384-a100-flattened-multi-turn
 #SBATCH --partition=onevision
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
@@ -36,9 +36,9 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-1e-5-batch-64-a100-flattened-multi-turn \
+    --output_dir ./checkpoints/llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-1e-5-batch-384-a100-flattened-multi-turn \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
+    --per_device_train_batch_size 12 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 4 \
     --evaluation_strategy "no" \
