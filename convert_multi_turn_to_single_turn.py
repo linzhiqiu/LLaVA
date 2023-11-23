@@ -1,8 +1,13 @@
+filename = "llava_v1_5_mix665k"
+filename = "share-captioner_coco_lcs_sam_1246k_1107"
+# filename = "sharegpt4v_instruct_gpt4-vision_cap100k"
+# filename = "sharegpt4v_mix665k_cap23k_coco-ap9k_lcs3k_sam9k_div2k"
+
 import os
 from copy import deepcopy
 def main():
     import json
-    file = "./playground/data/llava_v1_5_mix665k.json"
+    file = f"./playground/data/{filename}.json"
     samples = json.load(open(file, 'r'))
     print(f"Total samples: {len(samples)}")
     
@@ -32,7 +37,7 @@ def main():
     print(f"Total single-turn samples: {single_turn_count}")
     print(f"Total multi-turn samples: {multi_turn_count}")
     print(f"Total converted multi-turn samples: {len(converted_multi_turn_samples)}")
-    new_file = "./playground/data/llava_v1_5_mix665k_flattened_multi_turn.json"
+    new_file = f"./playground/data/{filename}_flattened_multi_turn.json"
     json.dump(converted_multi_turn_samples, open(new_file, 'w'), indent=4)
     print(f"Saved to {new_file}")
     
