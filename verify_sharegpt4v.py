@@ -6,14 +6,16 @@ import os
 from copy import deepcopy
 def main():
     import json
-    all_samples = json.load(open(f"./playground/data/llava_v1_5_mix665k_flattened_multi_turn.json", 'r'))
+    # all_name = "llava_v1_5_mix665k_flattened_multi_turn"
+    all_name = "llava_v1_5_mix665k"
+    all_samples = json.load(open(f"./playground/data/{all_name}.json", 'r'))
     for k, v in filenames.items():
-        new_file = f"./playground/data/llava_v1_5_mix665k_flattened_multi_turn_{k}.json"
+        new_file = f"./playground/data/{all_name}_{k}.json"
         file = f"./playground/data/{v}.json"
         samples = json.load(open(file, 'r'))
         print(f"Total samples of {k}: {len(samples)}")
 
-        mix_samples = json.load(open(f"./playground/data/llava_v1_5_mix665k_flattened_multi_turn.json", 'r'))
+        mix_samples = json.load(open(f"./playground/data/{all_name}.json", 'r'))
         
         image_exists = 0
         for sample in samples:
@@ -28,7 +30,7 @@ def main():
         json.dump(mix_samples, open(new_file, 'w'), indent=4)
         print(f"Saved to {new_file}")
     print(f"Total samples of all: {len(all_samples)}")
-    new_file = f"./playground/data/llava_v1_5_mix665k_flattened_multi_turn_gpt4v.json"
+    new_file = f"./playground/data/{all_name}_gpt4v.json"
     json.dump(all_samples, open(new_file, 'w'), indent=4)
     
 if __name__ == "__main__":
