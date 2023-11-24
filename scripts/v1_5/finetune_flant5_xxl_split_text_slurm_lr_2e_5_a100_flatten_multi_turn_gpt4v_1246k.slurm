@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-4-batch-96-a100-flattened-multi-turn
+#SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v-gpt4v_1246k
 #SBATCH --partition=onevision
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
@@ -25,7 +25,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --deepspeed ./scripts/zero3.json \
     --model_name_or_path google/flan-t5-xxl \
     --version t5_v1 \
-    --data_path ./playground/data/llava_v1_5_mix665k_flattened_multi_turn.json \
+    --data_path ./playground/data/llava_v1_5_mix665k_flattened_multi_turn_gpt4v_gpt4v_1246k.json \
     --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \
     --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-flant5-xxl-pretrain-split-text-lr-1e-2-a100/mm_projector.bin \
@@ -36,7 +36,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-4-batch-96-a100-flattened-multi-turn \
+    --output_dir ./checkpoints/llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v-gpt4v_1246k \
     --num_train_epochs 1 \
     --per_device_train_batch_size 6 \
     --per_device_eval_batch_size 4 \
@@ -45,7 +45,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --save_strategy "steps" \
     --save_steps 50000 \
     --save_total_limit 1 \
-    --learning_rate 2e-4 \
+    --learning_rate 2e-5 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
