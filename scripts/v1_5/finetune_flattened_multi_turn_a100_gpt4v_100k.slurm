@@ -24,7 +24,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --deepspeed ./scripts/zero3.json \
     --model_name_or_path lmsys/vicuna-13b-v1.5 \
     --version v1 \
-    --data_path ./playground/data/llava_v1_5_mix665k_flattened_multi_turn_gpt4_100k.json \
+    --data_path ./playground/data/llava_v1_5_mix665k_flattened_multi_turn_gpt4v_100k.json \
     --image_folder ./playground/data \
     --vision_tower openai/clip-vit-large-patch14-336 \
     --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-13b-pretrain/mm_projector.bin \
