@@ -38,9 +38,9 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --bf16 True \
     --output_dir ./checkpoints/llava-v1.5-t5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 4 \
+    --per_device_train_batch_size 3 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 3 \
+    --gradient_accumulation_steps 4 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
     --save_steps 50000 \
