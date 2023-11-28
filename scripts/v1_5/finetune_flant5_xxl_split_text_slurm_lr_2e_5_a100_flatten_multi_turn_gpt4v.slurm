@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v
+#SBATCH --job-name=llava-v1.5-flant5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v-batch-2-6
 #SBATCH --partition=onevision
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
