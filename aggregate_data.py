@@ -22,11 +22,14 @@ def main():
             
             image_exists = 0
             for sample in samples:
-                image_path = "./playground/data/" + sample["image"]
+                image_path = "./playground/data/LLaVA-Pretrain/images/" + sample["image"]
+                sample["image"] = "LLaVA-Pretrain/images/" + sample["image"]
                 if os.path.exists(image_path):
                     image_exists += 1
                     mix_samples.append(sample)
                     # all_samples.append(sample)
+                else:
+                    import pdb; pdb.set_trace()
             
             print(f"Image exists: {image_exists}")
             print(f"Total samples of {k} after adding: {len(mix_samples)}")
