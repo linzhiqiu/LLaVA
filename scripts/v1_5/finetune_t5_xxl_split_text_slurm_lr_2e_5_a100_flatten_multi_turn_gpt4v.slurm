@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=llava-v1.5-t5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v
+#SBATCH --job-name=llava-v1.5-t5-xxl-split-text-stage1-lr-1e-2-stage-2-lr-2e-5-batch-96-a100-flattened-multi-turn-gpt4v-batch-2-step-3-gpu-16-day-10
 #SBATCH --partition=onevision
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1          # crucial - only 1 task per dist per node!
 #SBATCH --cpus-per-task=8            # number of cores per tasks
 #SBATCH --gres=gpu:8                 # number of gpus
-#SBATCH --time 4-00:00:00            # maximum execution time (HH:MM:SS)
+#SBATCH --time 10-00:00:00            # maximum execution time (HH:MM:SS)
 #SBATCH --output=logs/%x-%j.out           # output file name
 
 echo "START TIME: $(date)"
@@ -40,7 +40,7 @@ srun --jobid $SLURM_JOB_ID bash -c 'python -u -m torch.distributed.run \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 6 \
+    --gradient_accumulation_steps 3 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
     --save_steps 50000 \
