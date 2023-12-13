@@ -2,7 +2,7 @@
 
 *Evaluating text-to-image faithfulness with VQAScore.*
 
-[[Project Page](https://todo/)] [[Demo](https://todo/)]  [[Data](https://github.com/linzhiqiu/CLIP-FlanT5/blob/main/docs/Data.md)] [[Model Zoo](https://github.com/linzhiqiu/CLIP-FlanT5/blob/main/docs/MODEL_ZOO.md)]
+[[Project Page](https://linzhiqiu.github.io/vqascore/)] [[Code for evaluation](https://todo/)]  [[Data](https://github.com/linzhiqiu/CLIP-FlanT5/blob/main/docs/Data.md)] [[Model Zoo](https://github.com/linzhiqiu/CLIP-FlanT5/blob/main/docs/MODEL_ZOO.md)]
 
 <!-- **Visual Instruction Tuning** (NeurIPS 2023, **Oral**) [[Paper](https://arxiv.org/abs/2304.08485)]<br>
 [Haotian Liu*](https://hliu.cc), [Chunyuan Li*](https://chunyuan.li/), [Qingyang Wu](https://scholar.google.ca/citations?user=HDiw-TsAAAAJ&hl=en/), [Yong Jae Lee](https://pages.cs.wisc.edu/~yongjaelee/) (*Equal Contribution) -->
