@@ -1,7 +1,4 @@
-# filename = "llava_v1_5_mix665k"
-# filename = "share-captioner_coco_lcs_sam_1246k_1107"
-# filename = "sharegpt4v_instruct_gpt4-vision_cap100k"
-filename = "sharegpt4v_mix665k_cap23k_coco-ap9k_lcs3k_sam9k_div2k"
+filename = "llava_v1_5_mix665k"
 
 import os
 from copy import deepcopy

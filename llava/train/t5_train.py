@@ -33,7 +33,7 @@ from llava.train.llava_trainer import LLaVATrainer
 
 from llava import conversation as conversation_lib
 from llava.model import *
-from llava.mm_utils import tokenizer_image_token, t5_tokenizer_image_token
+from llava.mm_utils import t5_tokenizer_image_token
 
 from PIL import Image
 
@@ -46,8 +46,8 @@ def rank0_print(*args):
 
 @dataclass
 class ModelArguments:
-    model_name_or_path: Optional[str] = field(default="facebook/opt-125m")
-    version: Optional[str] = field(default="v0")
+    model_name_or_path: Optional[str] = field(default="google/flan-t5-xl")
+    version: Optional[str] = field(default="t5_v1")
     freeze_backbone: bool = field(default=False)
     tune_mm_mlp_adapter: bool = field(default=False)
     vision_tower: Optional[str] = field(default=None)
@@ -214,6 +214,31 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
         trainer._save(output_dir, state_dict=cpu_state_dict)  # noqa
 
 
+def smart_tokenizer_and_embedding_resize(
+    special_tokens_dict: Dict,
+    tokenizer: transformers.PreTrainedTokenizer,
+    model: transformers.PreTrainedModel,
+):
+    """Resize tokenizer and embedding.
+
+    Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
+    """
+    num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    model.resize_token_embeddings(len(tokenizer))
+
+    if num_new_tokens > 0:
+        input_embeddings = model.get_input_embeddings().weight.data
+        output_embeddings = model.get_output_embeddings().weight.data
+
+        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(
+            dim=0, keepdim=True)
+        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(
+            dim=0, keepdim=True)
+
+        input_embeddings[-num_new_tokens:] = input_embeddings_avg
+        output_embeddings[-num_new_tokens:] = output_embeddings_avg
+
+
 def _tokenize_fn(strings: Sequence[str],
                  tokenizer: transformers.PreTrainedTokenizer) -> Dict:
     """Tokenize a list of strings."""
@@ -377,6 +402,58 @@ def preprocess_v1(
         labels=targets,
     )
 
+
+def preprocess_v1_t5(
+    sources,
+    tokenizer: transformers.PreTrainedTokenizer,
+    has_image: bool = False
+) -> Dict:
+    conv = conversation_lib.default_conversation.copy()
+    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
+
+    # Apply prompt templates
+    conversations = []
+    targets = []
+    for i, source in enumerate(sources):
+        if roles[source[0]["from"]] != conv.roles[0]:
+            # Skip the first one if it is not from human
+            source = source[1:]
+
+        conv.messages = []
+        for j, sentence in enumerate(source):
+            role = roles[sentence["from"]]
+            assert role == conv.roles[j % 2], f"{i}"
+            conv.append_message(role, sentence["value"])
+        conversations.append(conv.get_t5_input())
+        targets.append(conv.get_t5_output())
+
+    # Tokenize conversations
+    if has_image:
+        input_ids = torch.stack([t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations], dim=0)
+        targets = torch.stack([t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets], dim=0)
+    else:
+        input_ids = tokenizer(
+            conversations,
+            return_tensors="pt",
+            padding="longest",
+            max_length=tokenizer.model_max_length,
+            truncation=True,
+        ).input_ids
+        targets = tokenizer(
+            targets,
+            return_tensors="pt",
+            padding="longest",
+            max_length=tokenizer.model_max_length,
+            truncation=True,
+        ).input_ids
+
+    assert conv.sep_style == conversation_lib.SeparatorStyle.T5MODEL_TWO or conv.sep_style == conversation_lib.SeparatorStyle.T5MODEL_TWO_NO_ROLE
+
+    return dict(
+        input_ids=input_ids,
+        labels=targets,
+    )
+
 def preprocess_plain(
     sources: Sequence[str],
     tokenizer: transformers.PreTrainedTokenizer,
@@ -398,6 +475,58 @@ def preprocess_plain(
 
     return dict(input_ids=input_ids, labels=targets)
 
+def preprocess_plain_t5(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    conversations = []
+    targets = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        conversation = source[0]['value']
+        conversations.append(conversation)
+        target = source[1]['value'] + conversation_lib.default_conversation.sep
+        targets.append(target)
+    
+    # tokenize conversations
+    input_ids = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets]
+
+    return dict(input_ids=input_ids, labels=targets)
+
+def preprocess_plain_split_text_t5(
+    sources: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    # add end signal and concatenate together
+    # This implements split text training by randomly setting a prefix for the target
+    conversations = []
+    targets = []
+    for source in sources:
+        assert len(source) == 2
+        assert DEFAULT_IMAGE_TOKEN in source[0]['value']
+        source[0]['value'] = DEFAULT_IMAGE_TOKEN
+        target = source[1]['value'] + conversation_lib.default_conversation.sep
+        text_len = len(target)
+        if text_len < 2:
+            split = 0
+        else:
+            split = random.randint(1, text_len // 2)
+        prefix = target[:split]
+        conversation = source[0]['value'] + prefix
+        conversations.append(conversation)
+        
+        targets.append(target[split:])
+    
+    # tokenize conversations
+    input_ids = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations]
+    targets = [t5_tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in targets]
+
+    return dict(input_ids=input_ids, labels=targets)
+
 def preprocess(
     sources: Sequence[str],
     tokenizer: transformers.PreTrainedTokenizer,
@@ -412,6 +541,12 @@ def preprocess(
     """
     if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN:
         return preprocess_plain(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.T5MODEL_PLAIN:
+        return preprocess_plain_t5(sources, tokenizer)
+    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.T5MODEL_PLAIN_SPLIT_TEXT:
+        return preprocess_plain_split_text_t5(sources, tokenizer)
+    if conversation_lib.default_conversation.version.startswith("t5_v1"):
+        return preprocess_v1_t5(sources, tokenizer, has_image=has_image)
     if conversation_lib.default_conversation.version.startswith("v1"):
         return preprocess_v1(sources, tokenizer, has_image=has_image)
     # add end signal and concatenate together
@@ -525,10 +660,10 @@ class LazySupervisedDataset(Dataset):
             data_dict['image'] = torch.zeros(3, crop_size['height'], crop_size['width'])
         return data_dict
 
-
+    
 @dataclass
-class DataCollatorForSupervisedDataset(object):
-    """Collate examples for supervised fine-tuning."""
+class DataCollatorForSupervisedDatasetT5(object):
+    """Collate examples for supervised fine-tuning for T5 (Seq2Seq Model)."""
 
     tokenizer: transformers.PreTrainedTokenizer
 
@@ -548,6 +683,7 @@ class DataCollatorForSupervisedDataset(object):
             input_ids=input_ids,
             labels=labels,
             attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+            decoder_attention_mask=labels.ne(IGNORE_INDEX),
         )
 
         if 'image' in instances[0]:
@@ -561,7 +697,7 @@ class DataCollatorForSupervisedDataset(object):
 
 
 def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
-                                data_collator_class: DataCollatorForSupervisedDataset,
+                                data_collator_class: DataCollatorForSupervisedDatasetT5,
                                 data_args) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
     train_dataset = LazySupervisedDataset(tokenizer=tokenizer,
@@ -573,7 +709,7 @@ def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
                 data_collator=data_collator)
 
 
-def train():
+def t5_train():
     global local_rank
 
     parser = transformers.HfArgumentParser(
@@ -600,18 +736,14 @@ def train():
             )
         ))
 
-    if model_args.vision_tower is not None:
-        model = LlavaLlamaForCausalLM.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            **bnb_model_from_pretrained_args
-        )
-    else:
-        model = transformers.LlamaForCausalLM.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            **bnb_model_from_pretrained_args
-        )
+    assert model_args.vision_tower is not None
+    config = transformers.AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
+    model = LlavaT5ForConditionalGeneration.from_pretrained(
+        model_args.model_name_or_path,
+        config=config,
+        cache_dir=training_args.cache_dir,
+        **bnb_model_from_pretrained_args
+    )
     model.config.use_cache = False
 
     if model_args.freeze_backbone:
@@ -648,19 +780,20 @@ def train():
         rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
+    from transformers import T5TokenizerFast
+    tokenizer = T5TokenizerFast.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
         model_max_length=training_args.model_max_length,
+        truncation_side='right',
         padding_side="right",
-        use_fast=False,
     )
 
-    tokenizer.pad_token = tokenizer.unk_token
     if model_args.version in conversation_lib.conv_templates:
         conversation_lib.default_conversation = conversation_lib.conv_templates[model_args.version]
     else:
-        conversation_lib.default_conversation = conversation_lib.conv_templates["vicuna_v1"]
+        # conversation_lib.default_conversation = conversation_lib.conv_templates["t5_v1"]
+        raise ValueError(f"Unsupported version: {model_args.version}")
 
     if model_args.vision_tower is not None:
         model.get_model().initialize_vision_modules(
@@ -711,10 +844,10 @@ def train():
     
     data_module = make_supervised_data_module(
         tokenizer=tokenizer,
-        data_collator_class=DataCollatorForSupervisedDataset,
+        data_collator_class=DataCollatorForSupervisedDatasetT5,
         data_args=data_args
     )
-    torch.cuda.empty_cache()
+    torch.cuda.empty_cache() # Added for Flan-T5
     trainer = LLaVATrainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,
@@ -745,4 +878,4 @@ def train():
 
 
 if __name__ == "__main__":
-    train()
+    t5_train()

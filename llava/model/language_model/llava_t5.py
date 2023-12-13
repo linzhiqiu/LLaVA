@@ -24,7 +24,7 @@ from transformers import AutoConfig, AutoModelForSeq2SeqLM
 from transformers.modeling_outputs import Seq2SeqLMOutput
 
 from ..llava_arch import LlavaMetaModel, LlavaMetaForSeq2SeqLM
-from transformers import T5Config, T5ForConditionalGeneration, T5PreTrainedModel
+from transformers import T5Config, T5ForConditionalGeneration
 
 
 class T5LlavaConfig(T5Config):
@@ -32,6 +32,7 @@ class T5LlavaConfig(T5Config):
 
 
 class LlavaT5ForConditionalGeneration(LlavaMetaModel, LlavaMetaForSeq2SeqLM, T5ForConditionalGeneration): # To make multiple inheritance work, need to put T5ForConditionalGeneration at the end
+    # This class supports both T5 and FlanT5
     config_class = T5LlavaConfig
 
     def __init__(self, config):
