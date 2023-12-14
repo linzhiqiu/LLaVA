@@ -39,11 +39,11 @@ class CLIPT5ForConditionalGeneration(T5ForConditionalGeneration): # To make mult
     # This class supports both T5 and FlanT5
     config_class = CLIPT5Config
 
-    def __init__(self, config):
+    def __init__(self, config, delay_load=True):
         super(CLIPT5ForConditionalGeneration, self).__init__(config)
         self.embed_tokens = self.encoder.embed_tokens
         if hasattr(config, "mm_vision_tower"):
-            self.vision_tower = build_vision_tower(config, delay_load=True)
+            self.vision_tower = build_vision_tower(config, delay_load=delay_load)
             self.mm_projector = build_vision_projector(config)
 
     def get_model(self):

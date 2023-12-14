@@ -73,14 +73,16 @@ def create_data_loader(questions, image_folder, tokenizer, image_processor, mode
     data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
     return data_loader
 
-
+@torch.no_grad()
 def eval_model(args):
     # Model
     disable_torch_init()
     model_path = os.path.expanduser(args.model_path)
     model_name = get_model_name_from_path(model_path)
     tokenizer, model, image_processor, context_len, use_t5 = load_pretrained_model(model_path, args.model_base, model_name)
-
+    # set all weights to have requires_grad False
+    for param in model.parameters():
+        param.requires_grad = False
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)
     answers_file = os.path.expanduser(args.answers_file)
@@ -99,14 +101,17 @@ def eval_model(args):
         with torch.inference_mode():
             output_ids = model.generate(
                 input_ids,
-                images=image_tensor.to(dtype=torch.float16, device='cuda', non_blocking=True),
+                images=image_tensor.to(dtype=torch.bfloat16, device='cuda', non_blocking=True),
                 do_sample=True if args.temperature > 0 else False,
                 temperature=args.temperature,
                 top_p=args.top_p,
                 num_beams=args.num_beams,
-                max_new_tokens=128,
-                use_cache=True)
-
+                # max_new_tokens=128,
+                max_new_tokens=2,
+                # use_cache=True
+                use_cache=False
+            )
+            import pdb; pdb.set_trace()
         input_token_len = input_ids.shape[1]
         n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
         if n_diff_input_output > 0:

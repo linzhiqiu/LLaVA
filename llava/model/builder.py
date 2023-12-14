@@ -50,7 +50,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
     else:
         kwargs['torch_dtype'] = torch.float16
 
-    use_t5 = 'clip-t5' or 'clip-flant5' in model_name.lower()
+    use_t5 = 'clip-t5' in model_name.lower() or 'clip-flant5' in model_name.lower()
     if 'llava' in model_name.lower():
         # Load LLaVA model
         if 'lora' in model_name.lower() and model_base is None:
@@ -135,7 +135,13 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                 truncation_side='right',
                 padding_side="right",
             )
-            model = CLIPT5ForConditionalGeneration.from_pretrained(load_model_path, low_cpu_mem_usage=True, config=cfg_pretrained, **kwargs)
+            model = CLIPT5ForConditionalGeneration.from_pretrained(
+                load_model_path,
+                # config=cfg_pretrained,
+                delay_load=False,
+                torch_dtype=torch.bfloat16
+            )
+            model.to(dtype=torch.bfloat16, device=device)
 
             if load_projector_only:
                 # Not tested
@@ -150,7 +156,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                     local_dir=local_dir,
                 )
                 mm_projector_weights = torch.load(os.path.join(local_dir, 'mm_projector.bin'), map_location='cpu')
-                mm_projector_weights = {k: v.to(torch.float16) for k, v in mm_projector_weights.items()}
+                mm_projector_weights = {k: v.to(torch.bfloat16) for k, v in mm_projector_weights.items()}
                 model.load_state_dict(mm_projector_weights, strict=False)
     else:
         raise NotImplementedError()

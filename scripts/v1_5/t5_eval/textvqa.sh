@@ -6,7 +6,7 @@ python -m llava.eval.model_vqa_loader \
     --image-folder ./playground/data/eval/textvqa/train_images \
     --answers-file ./playground/data/eval/textvqa/answers/clip-flant5-xxl.jsonl \
     --temperature 0 \
-    --conv-mode t5_v1
+    --conv-mode vicuna_v1
 
 python -m llava.eval.eval_textvqa \
     --annotation-file ./playground/data/eval/textvqa/TextVQA_0.5.1_val.json \
