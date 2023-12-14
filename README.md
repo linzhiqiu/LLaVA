@@ -53,6 +53,11 @@ pip install -e ".[train]"
 pip install flash-attn --no-build-isolation
 ```
 
+4. Install huggingface_hub
+```
+python -m pip install huggingface_hub
+```
+
 ### Upgrade to latest code base
 
 ```Shell

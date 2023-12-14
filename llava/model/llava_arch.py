@@ -262,8 +262,8 @@ class LlavaMetaForSeq2SeqLM(ABC):
     def get_model(self):
         pass
 
-    def get_vision_tower(self):
-        return self.get_model().get_vision_tower()
+    # def get_vision_tower(self):
+    #     return self.get_model().get_vision_tower()
 
     def encode_images(self, images):
         image_features = self.get_model().get_vision_tower()(images)
